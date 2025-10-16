@@ -119,6 +119,8 @@ namespace DoomRaycastWinForms
             if (e.KeyCode == Keys.S) backward = true;
             if (e.KeyCode == Keys.A) turnLeft = true;
             if (e.KeyCode == Keys.D) turnRight = true;
+                //if (e.KeyCode == Keys.R) currentGun.Reload(); // <-- Reload key
+
         }
 
         private void OnKeyUp(object sender, KeyEventArgs e)
@@ -150,6 +152,9 @@ namespace DoomRaycastWinForms
             if (!currentGun.HasAmmo()) return;
 
             currentGun.Shoot();
+
+            // Play gunshot sound
+            gunshotSound.Play();
 
             // For each projectile
             for (int p = 0; p < currentGun.ProjectilesPerShot; p++)

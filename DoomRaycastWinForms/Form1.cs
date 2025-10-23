@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Media;
 using System.Windows.Forms;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.Tab;
 
 namespace DoomRaycastWinForms
 {
@@ -36,6 +37,8 @@ namespace DoomRaycastWinForms
 
         bool forward, backward, turnLeft, turnRight;
         private SoundPlayer gunshotSound;
+        private SoundPlayer reloadSound;
+
         // Gun & ammo
         Gun currentGun;
 
@@ -51,6 +54,7 @@ namespace DoomRaycastWinForms
 
         // Timer
         System.Windows.Forms.Timer gameTimer = new System.Windows.Forms.Timer();
+        private Image ammoBoxImage;
 
         public Form1()
         {
@@ -73,6 +77,12 @@ namespace DoomRaycastWinForms
             // Load your gun image - adjust path as needed
             string imagePath = @"C:\Users\students\source\repos\Akom3n\mehano-escape\DoomRaycastWinForms\bin\Debug\net8.0-windows\lib\usp-s.png";
             pictureBoxGun.Image = Image.FromFile(imagePath);
+
+            string imageBox = @"C:\Users\students\source\repos\Akom3n\mehano-escape\DoomRaycastWinForms\bin\Debug\net8.0-windows\lib\ammo_box.png";
+            ammoBoxImage = Image.FromFile(imageBox);
+
+            reloadSound = new SoundPlayer(@"C:\Users\students\source\repos\Akom3n\mehano-escape\DoomRaycastWinForms\bin\Debug\net8.0-windows\lib\reload1.wav");
+            reloadSound.Load();
 
             pictureBoxGun.SizeMode = PictureBoxSizeMode.StretchImage;
             pictureBoxGun.Width = 200;
@@ -119,7 +129,7 @@ namespace DoomRaycastWinForms
             if (e.KeyCode == Keys.S) backward = true;
             if (e.KeyCode == Keys.A) turnLeft = true;
             if (e.KeyCode == Keys.D) turnRight = true;
-                //if (e.KeyCode == Keys.R) currentGun.Reload(); // <-- Reload key
+            if (e.KeyCode == Keys.R) currentGun.Reload();
 
         }
 
@@ -265,7 +275,7 @@ namespace DoomRaycastWinForms
                 if (dist < blockSize / 2)
                 {
                     // Pickup
-                    currentGun.AddClips(1); // or some logic
+                    currentGun.Reload(); // or some logic
                     ammoBoxes.RemoveAt(i);
                 }
             }
@@ -351,6 +361,45 @@ namespace DoomRaycastWinForms
                 }
             }
 
+
+
+
+            foreach (var box in ammoBoxes)
+                
+            {
+                // Convert ammo box world coordinates to screen projection
+                float boxX = box.mapX * blockSize + blockSize / 2;
+                float boxY = box.mapY * blockSize + blockSize / 2;
+
+                float dx = boxX - playerX;
+                float dy = boxY - playerY;
+
+                float distance = (float)Math.Sqrt(dx * dx + dy * dy);
+                float angleToBox = (float)Math.Atan2(dy, dx);
+                float relativeAngle = angleToBox - playerAngle;
+
+                // Normalize angle to [-π, π]
+                while (relativeAngle < -Math.PI) relativeAngle += (float)(2 * Math.PI);
+                while (relativeAngle > Math.PI) relativeAngle -= (float)(2 * Math.PI);
+
+                float halfFOV = fov / 2;
+                if (Math.Abs(relativeAngle) < halfFOV)
+                {
+                    // Преди да рисуваме — проверяваме дали касетата се вижда (няма стена по пътя)
+                    if (IsVisible(boxX, boxY))
+                    {
+                        int screenX = (int)((relativeAngle + halfFOV) / fov * screenWidth);
+                        float size = (blockSize * screenHeight) / (distance * 1.5f);
+                        int imgW = (int)size;
+                        int imgH = (int)size;
+                        int screenY = (int)(screenHeight / 2 + (blockSize * screenHeight / distance) / 2 - imgH);
+
+                        Rectangle destRect = new Rectangle(screenX - imgW / 2, screenY, imgW, imgH);
+                        g.DrawImage(ammoBoxImage, destRect);
+                    }
+                }
+            }
+
             // Draw mini map
             DrawMiniMap(g);
 
@@ -383,6 +432,33 @@ namespace DoomRaycastWinForms
                 g.FillRectangle(Brushes.Green, box.mapX * blockSize / scale + 2, box.mapY * blockSize / scale + 2, blockSize / scale - 4, blockSize / scale - 4);
             }
         }
+
+        private bool IsVisible(float targetX, float targetY)
+        {
+            float dx = targetX - playerX;
+            float dy = targetY - playerY;
+            float distance = (float)Math.Sqrt(dx * dx + dy * dy);
+
+            // Normalize direction vector
+            float stepX = dx / distance;
+            float stepY = dy / distance;
+
+            float currentX = playerX;
+            float currentY = playerY;
+
+            float stepSize = 5f; // small steps for accuracy
+
+            for (float traveled = 0; traveled < distance; traveled += stepSize)
+            {
+                currentX += stepX * stepSize;
+                currentY += stepY * stepSize;
+
+                if (IsWall(currentX, currentY))
+                    return false; // Wall blocks the view
+            }
+            return true; // No wall blocking
+        }
+
 
         // Helper classes
 
@@ -420,9 +496,13 @@ namespace DoomRaycastWinForms
                 }
             }
 
-            public void AddClips(int n)
+            public void Reload()
             {
-                Clips += n;
+                if (CurrentAmmo < ClipSize && Clips > 0)
+                {
+                    Clips--;
+                    CurrentAmmo = ClipSize;
+                }
             }
         }
 
@@ -456,6 +536,7 @@ namespace DoomRaycastWinForms
 
 
             Bitmap gunSpriteSheet;
+            Bitmap ammoBoxImage;
             int frameWidth;
             int frameHeight;
             int currentFrame = 0;
